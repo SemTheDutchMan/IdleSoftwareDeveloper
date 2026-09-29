@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -18,18 +17,29 @@ namespace CodeClicker
         private static int escapeHandledFrame = -1;
 
         public static bool IsOpen { get; private set; }
-        public static bool EscapeHandledThisFrame => escapeHandledFrame == Time.frameCount;
+        public static bool EscapeHandledThisFrame
+        {
+            get { return escapeHandledFrame == Time.frameCount; }
+        }
 
-        public static bool IsTypingOrOpening => IsOpen || ShortcutHeld;
+        public static bool IsTypingOrOpening
+        {
+            get { return IsOpen || ShortcutHeld; }
+        }
 
         private static bool ShortcutHeld
         {
             get
             {
                 Keyboard keyboard = Keyboard.current;
-                return keyboard != null &&
-                       (keyboard.digit0Key.isPressed || keyboard.numpad0Key.isPressed) &&
-                       (keyboard.digit1Key.isPressed || keyboard.numpad1Key.isPressed);
+                if (keyboard == null)
+                {
+                    return false;
+                }
+
+                bool zeroIsHeld = keyboard.digit0Key.isPressed || keyboard.numpad0Key.isPressed;
+                bool oneIsHeld = keyboard.digit1Key.isPressed || keyboard.numpad1Key.isPressed;
+                return zeroIsHeld && oneIsHeld;
             }
         }
 
@@ -64,7 +74,15 @@ namespace CodeClicker
                 return;
             }
 
-            heldFor = ShortcutHeld ? heldFor + Time.unscaledDeltaTime : 0f;
+            if (ShortcutHeld)
+            {
+                heldFor += Time.unscaledDeltaTime;
+            }
+            else
+            {
+                heldFor = 0f;
+            }
+
             if (heldFor >= SecondsToOpen)
             {
                 OpenBar();
@@ -100,38 +118,33 @@ namespace CodeClicker
 
         private void RunCommand()
         {
-            string command = input.text.Trim();
+            string command = input.text.Trim().ToLowerInvariant();
 
-            if (command.Equals("giveMoney", StringComparison.OrdinalIgnoreCase))
+            switch (command)
             {
-                moneySystem.AddCoins(100_000);
-            }
-            else if (command.Equals("Rich", StringComparison.OrdinalIgnoreCase))
-            {
-                moneySystem.AddCoins(1_000_000);
-            }
-            else if (command.Equals("Bill", StringComparison.OrdinalIgnoreCase))
-            {
-                moneySystem.AddCoins(1_000_000_000);
-            }
-            else if (command.Equals("demote", StringComparison.OrdinalIgnoreCase))
-            {
-                moneySystem.ResetCoins();
-            }
-            else if (command.Equals("save", StringComparison.OrdinalIgnoreCase))
-            {
-                SaveSystem.RequestSave();
-            }
-            else if (command.Equals("load", StringComparison.OrdinalIgnoreCase))
-            {
-                SaveSystem.RequestLoad();
-            }
-            else
-            {
-                input.text = string.Empty;
-                placeholder.text = "Unknown command";
-                input.ActivateInputField();
-                return;
+                case "givemoney":
+                    moneySystem.AddCoins(100_000);
+                    break;
+                case "rich":
+                    moneySystem.AddCoins(1_000_000);
+                    break;
+                case "bill":
+                    moneySystem.AddCoins(1_000_000_000);
+                    break;
+                case "demote":
+                    moneySystem.ResetCoins();
+                    break;
+                case "save":
+                    SaveSystem.RequestSave();
+                    break;
+                case "load":
+                    SaveSystem.RequestLoad();
+                    break;
+                default:
+                    input.text = string.Empty;
+                    placeholder.text = "Unknown command";
+                    input.ActivateInputField();
+                    return;
             }
 
             CloseBar();
