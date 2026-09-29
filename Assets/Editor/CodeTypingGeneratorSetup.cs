@@ -13,21 +13,23 @@ namespace CodeClickerEditor
         private const string MenuPath = "Tools/Code Clicker/Add Live Code Screen To Selected Computer";
         private const string MoneyMenuPath = "Tools/Code Clicker/Add Money HUD";
         private const string ShopMenuPath = "Tools/Code Clicker/Add Starter Shop";
-        private const string AutoSetupSessionKey = "CodeClicker.LiveCodeScreenAutoSetupCompleteV3";
+        private const string RepairWorkspaceMenuPath = "Tools/Code Clicker/Repair Coffee Machine Visual";
+        private const string AutoSetupSessionKey = "CodeClicker.LiveCodeScreenAutoSetupCompleteV5";
+        private const string CoffeeMachineAssetPath = "Assets/Art/CodeClickerUI/icon_coffee_machine.png";
 
         private static readonly UpgradeData[] ShopItems =
         {
-            new("Studeren", "+0.10 coins per key", 1, UpgradeEffect.CoinsPerKey, 0.1),
-            new("Forums bekijken", "+0.30 coins per key", 3, UpgradeEffect.CoinsPerKey, 0.3),
-            new("Online cursus", "+1 coin per key", 25, UpgradeEffect.CoinsPerKey, 1),
-            new("Junior developer", "+1 coin per second", 500, UpgradeEffect.PassiveIncome, 1),
-            new("Mechanical keyboard", "+5 coins per key", 2_500, UpgradeEffect.CoinsPerKey, 5),
-            new("CoPilot", "4 keys per code line", 10_000, UpgradeEffect.KeysPerLine, 4),
-            new("Dual monitors", "+25 coins per second", 50_000, UpgradeEffect.PassiveIncome, 25),
-            new("Coffee machine", "+100 coins per second", 125_000, UpgradeEffect.PassiveIncome, 100),
-            new("Betere muis", "3 keys per code line", 1_000_000, UpgradeEffect.KeysPerLine, 3),
-            new("Senior developer", "+10K coins per second", 30_000_000, UpgradeEffect.PassiveIncome, 10_000),
-            new("AI Assistant", "+50K coins per second", 100_000_000, UpgradeEffect.PassiveIncome, 50_000)
+            new UpgradeData("Studeren", "+0.10 coins per key", 1, UpgradeEffect.CoinsPerKey, 0.1),
+            new UpgradeData("Forums bekijken", "+0.30 coins per key", 3, UpgradeEffect.CoinsPerKey, 0.3),
+            new UpgradeData("Online cursus", "+1 coin per key", 25, UpgradeEffect.CoinsPerKey, 1),
+            new UpgradeData("Junior developer", "+1 coin per second", 500, UpgradeEffect.PassiveIncome, 1),
+            new UpgradeData("Mechanical keyboard", "+5 coins per key", 2_500, UpgradeEffect.CoinsPerKey, 5),
+            new UpgradeData("CoPilot", "4 keys per code line", 10_000, UpgradeEffect.KeysPerLine, 4),
+            new UpgradeData("Dual monitors", "+25 coins per second", 50_000, UpgradeEffect.PassiveIncome, 25),
+            new UpgradeData("Coffee machine", "+100 coins per second", 125_000, UpgradeEffect.PassiveIncome, 100),
+            new UpgradeData("Betere muis", "3 keys per code line", 1_000_000, UpgradeEffect.KeysPerLine, 3),
+            new UpgradeData("Senior developer", "+10K coins per second", 30_000_000, UpgradeEffect.PassiveIncome, 10_000),
+            new UpgradeData("AI Assistant", "+50K coins per second", 100_000_000, UpgradeEffect.PassiveIncome, 50_000)
         };
 
         static CodeTypingGeneratorSetup()
@@ -40,6 +42,7 @@ namespace CodeClickerEditor
 
         private static void OnSceneOpened(Scene scene, OpenSceneMode mode)
         {
+            SessionState.EraseBool(AutoSetupSessionKey);
             EditorApplication.delayCall += TryAutomaticSetup;
         }
 
@@ -113,6 +116,29 @@ namespace CodeClickerEditor
             EnsureStarterShop();
         }
 
+        [MenuItem(RepairWorkspaceMenuPath, false, 103)]
+        private static void RepairCoffeeMachineVisualFromMenu()
+        {
+            Image computer = FindComputerWorkstation();
+            if (computer == null)
+            {
+                EditorUtility.DisplayDialog(
+                    "Code Clicker",
+                    "De computer_workstation Image is niet gevonden in de geopende scène.",
+                    "OK");
+                return;
+            }
+
+            EnsureCoffeeMachineVisual(computer.gameObject);
+            Transform machine = computer.transform.Find("CoffeeMachine");
+            Selection.activeGameObject = computer.gameObject;
+            if (machine != null)
+            {
+                Selection.activeGameObject = machine.gameObject;
+            }
+            EditorGUIUtility.PingObject(Selection.activeGameObject);
+        }
+
         private static void TryAutomaticSetup()
         {
             if (SessionState.GetBool(AutoSetupSessionKey, false) ||
@@ -121,6 +147,26 @@ namespace CodeClickerEditor
                 return;
             }
 
+            Image computer = FindComputerWorkstation();
+            if (computer == null)
+            {
+                return;
+            }
+
+            if (computer.transform.Find("LiveCodeScreen") == null)
+            {
+                CreateLiveCodeScreen(computer.gameObject, false);
+                Debug.Log("[Code Clicker] LiveCodeScreen automatisch aan computer_workstation toegevoegd.", computer);
+            }
+
+            EnsureCoffeeMachineVisual(computer.gameObject);
+            EnsureMoneyHud(computer.GetComponentInParent<Canvas>());
+            EnsureStarterShop();
+            SessionState.SetBool(AutoSetupSessionKey, true);
+        }
+
+        private static Image FindComputerWorkstation()
+        {
             foreach (Image image in Resources.FindObjectsOfTypeAll<Image>())
             {
                 if (image == null || image.sprite == null || EditorUtility.IsPersistent(image))
@@ -128,37 +174,109 @@ namespace CodeClickerEditor
                     continue;
                 }
 
-                if (!image.gameObject.scene.IsValid() ||
-                    !image.sprite.name.StartsWith("computer_workstation", System.StringComparison.Ordinal))
+                if (image.gameObject.scene.IsValid() &&
+                    image.sprite.name.StartsWith("computer_workstation", System.StringComparison.Ordinal))
                 {
-                    continue;
+                    return image;
                 }
-
-                if (image.transform.Find("LiveCodeScreen") == null)
-                {
-                    CreateLiveCodeScreen(image.gameObject, false);
-                    Debug.Log("[Code Clicker] LiveCodeScreen automatisch aan computer_workstation toegevoegd.", image);
-                }
-
-                EnsureMoneyHud(image.GetComponentInParent<Canvas>());
-                EnsureStarterShop();
-
-                SessionState.SetBool(AutoSetupSessionKey, true);
-                return;
             }
+
+            return null;
+        }
+
+        private static void EnsureCoffeeMachineVisual(GameObject computer)
+        {
+            WorkspaceVisuals visuals = computer.GetComponent<WorkspaceVisuals>();
+            if (visuals == null)
+            {
+                visuals = Undo.AddComponent<WorkspaceVisuals>(computer);
+            }
+
+            RectTransform coffeeMachine = EnsureRawImage(
+                computer.transform,
+                "CoffeeMachine",
+                CoffeeMachineAssetPath,
+                new Vector2(0.14f, 0.30f),
+                new Vector2(0.34f, 0.58f));
+
+            Texture2D coffeeMachinePicture = AssetDatabase.LoadAssetAtPath<Texture2D>(CoffeeMachineAssetPath);
+            visuals.Configure(coffeeMachine, coffeeMachinePicture);
+
+            coffeeMachine.SetAsLastSibling();
+            RectTransform liveScreen = computer.transform.Find("LiveCodeScreen") as RectTransform;
+            if (liveScreen != null)
+            {
+                liveScreen.SetAsLastSibling();
+            }
+
+            coffeeMachine.gameObject.SetActive(false);
+            EditorUtility.SetDirty(visuals);
+            EditorUtility.SetDirty(computer);
+            EditorSceneManager.MarkSceneDirty(computer.scene);
+            Debug.Log("[Code Clicker] Coffee machine image is gekoppeld.", computer);
+        }
+
+        private static RectTransform EnsureRawImage(
+            Transform parent,
+            string objectName,
+            string assetPath,
+            Vector2 minimum,
+            Vector2 maximum)
+        {
+            Transform existing = parent.Find(objectName);
+            GameObject imageObject;
+            bool created = existing == null;
+            if (existing == null)
+            {
+                imageObject = new GameObject(objectName, typeof(RectTransform));
+                Undo.RegisterCreatedObjectUndo(imageObject, $"Add {objectName}");
+                imageObject.transform.SetParent(parent, false);
+                imageObject.layer = parent.gameObject.layer;
+            }
+            else
+            {
+                imageObject = existing.gameObject;
+            }
+
+            RectTransform rect = imageObject.GetComponent<RectTransform>();
+            if (created)
+            {
+                rect.anchorMin = minimum;
+                rect.anchorMax = maximum;
+                rect.offsetMin = Vector2.zero;
+                rect.offsetMax = Vector2.zero;
+            }
+
+            RawImage image = imageObject.GetComponent<RawImage>();
+            if (image == null)
+            {
+                Graphic otherGraphic = imageObject.GetComponent<Graphic>();
+                if (otherGraphic != null)
+                {
+                    Undo.DestroyObjectImmediate(otherGraphic);
+                }
+
+                image = Undo.AddComponent<RawImage>(imageObject);
+            }
+
+            image.texture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
+            image.color = Color.white;
+            image.raycastTarget = false;
+            EditorUtility.SetDirty(image);
+            return rect;
         }
 
         private static void CreateLiveCodeScreen(GameObject computer, bool showCompletionDialog)
         {
 
-            GameObject screen = new("LiveCodeScreen", typeof(RectTransform));
+            GameObject screen = new GameObject("LiveCodeScreen", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(screen, "Add Live Code Screen");
             screen.transform.SetParent(computer.transform, false);
             screen.transform.SetAsLastSibling();
 
             RectTransform screenRect = screen.GetComponent<RectTransform>();
-            screenRect.anchorMin = new Vector2(0.22f, 0.505f);
-            screenRect.anchorMax = new Vector2(0.78f, 0.915f);
+            screenRect.anchorMin = new Vector2(0.235f, 0.495f);
+            screenRect.anchorMax = new Vector2(0.82f, 0.935f);
             screenRect.offsetMin = Vector2.zero;
             screenRect.offsetMax = Vector2.zero;
 
@@ -167,7 +285,7 @@ namespace CodeClickerEditor
             background.raycastTarget = false;
             Undo.AddComponent<RectMask2D>(screen);
 
-            GameObject textObject = new("CodeText", typeof(RectTransform));
+            GameObject textObject = new GameObject("CodeText", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(textObject, "Add Code Text");
             textObject.transform.SetParent(screen.transform, false);
 
@@ -178,7 +296,8 @@ namespace CodeClickerEditor
             textRect.offsetMax = new Vector2(-8f, -6f);
 
             Text codeText = Undo.AddComponent<Text>(textObject);
-            codeText.text = "Press any key to start coding...\n|";
+            codeText.text = "Type to code\n|";
+            CodeClickerFont.Apply(codeText, 18, true);
             codeText.color = new Color(0.83f, 0.83f, 0.83f, 1f);
             codeText.fontSize = 18;
             codeText.alignment = TextAnchor.UpperLeft;
@@ -221,7 +340,7 @@ namespace CodeClickerEditor
                 return;
             }
 
-            GameObject moneyHud = new("MoneyHUD", typeof(RectTransform));
+            GameObject moneyHud = new GameObject("MoneyHUD", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(moneyHud, "Add Money HUD");
             moneyHud.transform.SetParent(canvas.transform, false);
             moneyHud.transform.SetAsLastSibling();
@@ -237,7 +356,7 @@ namespace CodeClickerEditor
             background.color = new Color(0.015f, 0.035f, 0.075f, 0.94f);
             background.raycastTarget = false;
 
-            GameObject textObject = new("MoneyText", typeof(RectTransform));
+            GameObject textObject = new GameObject("MoneyText", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(textObject, "Add Money Text");
             textObject.transform.SetParent(moneyHud.transform, false);
 
@@ -294,9 +413,10 @@ namespace CodeClickerEditor
                 return;
             }
 
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font font = Font.CreateDynamicFontFromOSFont(
+                new[] { "Segoe UI", "Arial", "Liberation Sans" }, 16);
 
-            GameObject viewport = new("ShopViewport", typeof(RectTransform));
+            GameObject viewport = new GameObject("ShopViewport", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(viewport, "Add Starter Shop");
             viewport.transform.SetParent(shopPanel.transform, false);
             viewport.transform.SetAsLastSibling();
@@ -313,7 +433,7 @@ namespace CodeClickerEditor
             scrollRect.movementType = ScrollRect.MovementType.Clamped;
             scrollRect.scrollSensitivity = 28f;
 
-            GameObject content = new("ShopContent", typeof(RectTransform));
+            GameObject content = new GameObject("ShopContent", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(content, "Add Shop Content");
             content.transform.SetParent(viewport.transform, false);
 
@@ -340,7 +460,7 @@ namespace CodeClickerEditor
 
         private static void CreateShopRow(Transform parent, UpgradeData item, int index, Font font)
         {
-            GameObject row = new($"Upgrade_{index + 1}_{item.Name}", typeof(RectTransform));
+            GameObject row = new GameObject($"Upgrade_{index + 1}_{item.Name}", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(row, "Add Shop Upgrade");
             row.transform.SetParent(parent, false);
 
@@ -352,18 +472,23 @@ namespace CodeClickerEditor
             rowRect.sizeDelta = new Vector2(0f, 72f);
 
             Image rowImage = Undo.AddComponent<Image>(row);
-            rowImage.color = index % 2 == 0
-                ? new Color(0.035f, 0.09f, 0.14f, 0.92f)
-                : new Color(0.025f, 0.07f, 0.12f, 0.92f);
+            if (index % 2 == 0)
+            {
+                rowImage.color = new Color(0.035f, 0.09f, 0.14f, 0.92f);
+            }
+            else
+            {
+                rowImage.color = new Color(0.025f, 0.07f, 0.12f, 0.92f);
+            }
 
-            Text nameText = CreateText(row.transform, "Name", item.Name, font, 15, FontStyle.Bold,
+            Text nameText = CreateText(row.transform, "Name", item.Name, font, 16, FontStyle.Bold,
                 TextAnchor.MiddleLeft, new Vector2(0.04f, 0.48f), new Vector2(0.66f, 0.96f), Color.white);
 
-            Text infoText = CreateText(row.transform, "Effect", item.Description, font, 11, FontStyle.Normal,
+            Text infoText = CreateText(row.transform, "Effect", item.Description, font, 13, FontStyle.Normal,
                 TextAnchor.MiddleLeft, new Vector2(0.04f, 0.05f), new Vector2(0.68f, 0.52f),
                 new Color(0.45f, 0.9f, 1f, 1f));
 
-            GameObject buttonObject = new("BuyButton", typeof(RectTransform));
+            GameObject buttonObject = new GameObject("BuyButton", typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(buttonObject, "Add Buy Button");
             buttonObject.transform.SetParent(row.transform, false);
             RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
@@ -375,7 +500,7 @@ namespace CodeClickerEditor
             button.targetGraphic = buttonImage;
 
             Text priceText = CreateText(buttonObject.transform, "Price", MoneySystem.FormatCoins(item.Price),
-                font, 12, FontStyle.Bold, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one,
+                font, 13, FontStyle.Bold, TextAnchor.MiddleCenter, Vector2.zero, Vector2.one,
                 new Color(0.08f, 0.06f, 0.04f, 1f));
 
             StoreUpgrades upgrade = Undo.AddComponent<StoreUpgrades>(row);
@@ -396,7 +521,7 @@ namespace CodeClickerEditor
             Vector2 anchorMax,
             Color color)
         {
-            GameObject textObject = new(objectName, typeof(RectTransform));
+            GameObject textObject = new GameObject(objectName, typeof(RectTransform));
             Undo.RegisterCreatedObjectUndo(textObject, "Add Shop Text");
             textObject.transform.SetParent(parent, false);
 
@@ -424,7 +549,7 @@ namespace CodeClickerEditor
             rect.offsetMax = Vector2.zero;
         }
 
-        private readonly struct UpgradeData
+        private sealed class UpgradeData
         {
             public readonly string Name;
             public readonly string Description;

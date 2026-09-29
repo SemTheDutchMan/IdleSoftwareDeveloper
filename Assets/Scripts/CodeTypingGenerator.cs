@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -17,7 +16,14 @@ namespace CodeClicker
         [Header("Typing")]
         [SerializeField, Min(1)] private int keysPerLine = 5;
 
-        private readonly StringBuilder visibleCode = new();
+        private static readonly string[] Keywords =
+        {
+            "using", "public", "private", "protected", "sealed", "class", "void",
+            "float", "int", "string", "bool", "return", "if", "else", "new",
+            "true", "false", "null", "this", "static"
+        };
+
+        private readonly StringBuilder visibleCode = new StringBuilder();
         private System.Random random;
         private string[] currentLines;
         private int lineIndex;
@@ -26,17 +32,16 @@ namespace CodeClicker
 
         public Text CodeDisplay
         {
-            get => codeDisplay;
-            set => codeDisplay = value;
+            get { return codeDisplay; }
+            set { codeDisplay = value; }
         }
 
-        public int KeysPerLine
-        {
-            get => keysPerLine;
-            private set => keysPerLine = Mathf.Max(1, value);
-        }
+        public int KeysPerLine { get { return keysPerLine; } }
 
         public int TotalKeyPresses { get; private set; }
+        public string VisibleCode { get { return visibleCode.ToString(); } }
+        public int PressedKeysForCurrentLine { get { return pressedKeysForCurrentLine; } }
+        public bool HasStartedTyping { get { return hasStartedTyping; } }
         public event Action KeyPressed;
         public event Action LineCompleted;
 
@@ -57,7 +62,10 @@ namespace CodeClicker
         private void Update()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || !Application.isFocused)
+            if (keyboard == null ||
+                !Application.isFocused ||
+                TestCommandBar.IsTypingOrOpening ||
+                SaveSystem.IsModalOpen)
             {
                 return;
             }
@@ -73,7 +81,10 @@ namespace CodeClicker
             hasStartedTyping = true;
             TotalKeyPresses++;
             pressedKeysForCurrentLine++;
-            KeyPressed?.Invoke();
+            if (KeyPressed != null)
+            {
+                KeyPressed();
+            }
 
             if (pressedKeysForCurrentLine >= keysPerLine)
             {
@@ -85,7 +96,7 @@ namespace CodeClicker
 
         public void SetKeysPerLine(int amount)
         {
-            KeysPerLine = Mathf.Min(keysPerLine, amount);
+            keysPerLine = Mathf.Min(keysPerLine, Mathf.Max(1, amount));
 
             if (pressedKeysForCurrentLine >= keysPerLine)
             {
@@ -104,6 +115,41 @@ namespace CodeClicker
             RefreshDisplay();
         }
 
+        public void StartNewGame()
+        {
+            keysPerLine = 5;
+            ClearScreen();
+        }
+
+        public void RestoreState(
+            int savedTotalKeyPresses,
+            int savedKeysPerLine,
+            string savedVisibleCode,
+            int savedPressedKeysForCurrentLine,
+            bool savedHasStartedTyping)
+        {
+            TotalKeyPresses = Mathf.Max(0, savedTotalKeyPresses);
+            keysPerLine = Mathf.Max(1, savedKeysPerLine);
+            pressedKeysForCurrentLine = Mathf.Clamp(
+                savedPressedKeysForCurrentLine,
+                0,
+                KeysPerLine - 1);
+            hasStartedTyping = savedHasStartedTyping;
+            if (TotalKeyPresses > 0 || !string.IsNullOrEmpty(savedVisibleCode))
+            {
+                hasStartedTyping = true;
+            }
+
+            visibleCode.Clear();
+            if (!string.IsNullOrEmpty(savedVisibleCode))
+            {
+                visibleCode.Append(savedVisibleCode);
+                TrimOldLines();
+            }
+
+            RefreshDisplay();
+        }
+
         private void CompleteLine()
         {
             if (lineIndex >= currentLines.Length)
@@ -117,7 +163,10 @@ namespace CodeClicker
             lineIndex++;
             pressedKeysForCurrentLine = 0;
             TrimOldLines();
-            LineCompleted?.Invoke();
+            if (LineCompleted != null)
+            {
+                LineCompleted();
+            }
         }
 
         private void CreateNewCodeFile()
@@ -136,25 +185,8 @@ namespace CodeClicker
                 return;
             }
 
-            if (codeDisplay.font == null)
-            {
-                codeDisplay.font = CreateCodeFont();
-            }
-
+            CodeClickerFont.Apply(codeDisplay, 18, true);
             codeDisplay.supportRichText = true;
-        }
-
-        private static Font CreateCodeFont()
-        {
-            Font font = Font.CreateDynamicFontFromOSFont(
-                new[] { "Cascadia Mono", "Consolas", "Courier New", "Arial" }, 18);
-
-            if (font != null)
-            {
-                return font;
-            }
-
-            return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
         private void TrimOldLines()
@@ -203,12 +235,16 @@ namespace CodeClicker
 
             if (!hasStartedTyping)
             {
-                codeDisplay.text = "<color=#6A9955>Press any key to start coding...</color>\n<color=#4FC1FF>|</color>";
+                codeDisplay.text = "<color=#A9D989>Type to code</color>\n<color=#4FC1FF>|</color>";
                 return;
             }
 
             string highlightedCode = HighlightSyntax(visibleCode.ToString());
-            string cursor = showCursor ? "<color=#4FC1FF>|</color>" : string.Empty;
+            string cursor = string.Empty;
+            if (showCursor)
+            {
+                cursor = "<color=#4FC1FF>|</color>";
+            }
             codeDisplay.text = highlightedCode + cursor;
         }
 
@@ -260,31 +296,11 @@ namespace CodeClicker
 
         private static string HighlightSyntax(string source)
         {
-            HashSet<string> keywords = new()
-            {
-                "using", "public", "private", "protected", "sealed", "class", "void",
-                "float", "int", "string", "bool", "return", "if", "else", "new",
-                "true", "false", "null", "this", "static"
-            };
-
-            StringBuilder result = new(source.Length * 2);
+            StringBuilder result = new StringBuilder(source.Length * 2);
             int index = 0;
 
             while (index < source.Length)
             {
-                if (index + 1 < source.Length && source[index] == '/' && source[index + 1] == '/')
-                {
-                    int end = source.IndexOf('\n', index);
-                    if (end < 0)
-                    {
-                        end = source.Length;
-                    }
-
-                    AppendColored(result, source.Substring(index, end - index), "6A9955");
-                    index = end;
-                    continue;
-                }
-
                 if (source[index] == '"')
                 {
                     int end = index + 1;
@@ -314,7 +330,7 @@ namespace CodeClicker
                     }
 
                     string word = source.Substring(index, end - index);
-                    if (keywords.Contains(word))
+                    if (Array.IndexOf(Keywords, word) >= 0)
                     {
                         AppendColored(result, word, "4FC1FF");
                     }

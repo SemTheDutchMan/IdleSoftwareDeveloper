@@ -25,12 +25,37 @@ public class StoreUpgrades : MonoBehaviour
     [SerializeField] private double priceMultiplier = 1.15;
     [SerializeField] private bool oneTimePurchase;
     private MoneySystem moneySystem;
+    private WorkspaceVisuals workspaceVisuals;
     private int purchaseCount;
 
-    private bool IsOneTime => oneTimePurchase || upgradeName == "CoPilot" || upgradeName == "AI Assistant";
-    private bool IsMaxed => (IsOneTime && purchaseCount > 0) ||
-                            (effect == UpgradeEffect.KeysPerLine && !IsOneTime && purchaseCount >= 3);
-    private double CurrentPrice => price * Math.Pow(priceMultiplier, purchaseCount);
+    private bool IsOneTime
+    {
+        get
+        {
+            return oneTimePurchase || upgradeName == "CoPilot" || upgradeName == "AI Assistant";
+        }
+    }
+
+    private bool IsMaxed
+    {
+        get
+        {
+            if (IsOneTime && purchaseCount > 0)
+            {
+                return true;
+            }
+
+            return effect == UpgradeEffect.KeysPerLine && purchaseCount >= 3;
+        }
+    }
+
+    private double CurrentPrice
+    {
+        get { return price * Math.Pow(priceMultiplier, purchaseCount); }
+    }
+
+    public string UpgradeName { get { return upgradeName; } }
+    public int PurchaseCount { get { return purchaseCount; } }
 
     public void Configure(
         string newName,
@@ -57,7 +82,11 @@ public class StoreUpgrades : MonoBehaviour
 
     private void Start()
     {
+        CodeClickerFont.Apply(nameText, 16);
+        CodeClickerFont.Apply(incomeInfoText, 13);
+        CodeClickerFont.Apply(priceText, 13);
         moneySystem = FindFirstObjectByType<MoneySystem>();
+        workspaceVisuals = FindFirstObjectByType<WorkspaceVisuals>();
         if (buyButton != null)
         {
             buyButton.onClick.AddListener(BuyUpgrade);
@@ -75,20 +104,57 @@ public class StoreUpgrades : MonoBehaviour
 
     public void BuyUpgrade()
     {
-        if (IsMaxed || moneySystem == null || !moneySystem.TrySpend(CurrentPrice))
+        if (IsMaxed || moneySystem == null)
+        {
+            return;
+        }
+
+        if (!moneySystem.TrySpend(CurrentPrice))
         {
             return;
         }
 
         purchaseCount++;
 
+        if (workspaceVisuals != null && upgradeName == "Coffee machine")
+        {
+            workspaceVisuals.ShowCoffeeMachine();
+        }
+
+        double upgradeAmount = effectAmount;
         if (effect == UpgradeEffect.KeysPerLine && !IsOneTime)
         {
-            moneySystem.ApplyUpgrade(effect, effectAmount - purchaseCount + 1);
+            upgradeAmount = effectAmount - purchaseCount + 1;
         }
-        else
+
+        moneySystem.ApplyUpgrade(effect, upgradeAmount);
+
+        UpdateUI();
+        SaveSystem.RequestSave();
+    }
+
+    public void RestorePurchaseCount(int savedPurchaseCount)
+    {
+        int maximum = 1000;
+        if (IsOneTime)
         {
-            moneySystem.ApplyUpgrade(effect, effectAmount);
+            maximum = 1;
+        }
+        else if (effect == UpgradeEffect.KeysPerLine)
+        {
+            maximum = 3;
+        }
+
+        purchaseCount = Mathf.Clamp(savedPurchaseCount, 0, maximum);
+
+        if (workspaceVisuals == null)
+        {
+            workspaceVisuals = FindFirstObjectByType<WorkspaceVisuals>();
+        }
+
+        if (purchaseCount > 0 && workspaceVisuals != null && upgradeName == "Coffee machine")
+        {
+            workspaceVisuals.ShowCoffeeMachine();
         }
 
         UpdateUI();
@@ -98,9 +164,11 @@ public class StoreUpgrades : MonoBehaviour
     {
         if (nameText != null)
         {
-            nameText.text = IsOneTime || purchaseCount == 0
-                ? upgradeName
-                : $"{upgradeName} x{purchaseCount}";
+            nameText.text = upgradeName;
+            if (!IsOneTime && purchaseCount > 0)
+            {
+                nameText.text = $"{upgradeName} x{purchaseCount}";
+            }
         }
 
         if (incomeInfoText != null)
@@ -110,7 +178,14 @@ public class StoreUpgrades : MonoBehaviour
 
         if (priceText != null)
         {
-            priceText.text = IsMaxed ? "Maxed" : MoneySystem.FormatCoins(CurrentPrice);
+            if (IsMaxed)
+            {
+                priceText.text = "Maxed";
+            }
+            else
+            {
+                priceText.text = MoneySystem.FormatCoins(CurrentPrice);
+            }
         }
     }
 }

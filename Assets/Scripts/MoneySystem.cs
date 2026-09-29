@@ -12,30 +12,25 @@ namespace CodeClicker
 
         private CodeTypingGenerator codeTypingGenerator;
 
-        public double Coins => coins;
-        public double CoinsPerKey => coinsPerKey;
-        public double PassiveCoinsPerSecond => passiveCoinsPerSecond;
+        public double Coins { get { return coins; } }
+        public double CoinsPerKey { get { return coinsPerKey; } }
+        public double PassiveCoinsPerSecond { get { return passiveCoinsPerSecond; } }
 
         public Text MoneyText
         {
-            get => moneyText;
-            set => moneyText = value;
+            get { return moneyText; }
+            set { moneyText = value; }
         }
 
         private void Start()
         {
             codeTypingGenerator = FindFirstObjectByType<CodeTypingGenerator>();
-
-            if (moneyText != null && moneyText.font == null)
+            if (GetComponent<TestCommandBar>() == null)
             {
-                moneyText.font = Font.CreateDynamicFontFromOSFont(
-                    new[] { "Cascadia Mono", "Consolas", "Arial" }, 30);
-
-                if (moneyText.font == null)
-                {
-                    moneyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                }
+                gameObject.AddComponent<TestCommandBar>();
             }
+
+            CodeClickerFont.Apply(moneyText, 30);
 
             if (codeTypingGenerator != null)
             {
@@ -50,8 +45,7 @@ namespace CodeClicker
         {
             if (passiveCoinsPerSecond > 0)
             {
-                coins += passiveCoinsPerSecond * Time.deltaTime;
-                UpdateMoneyText();
+                AddCoins(passiveCoinsPerSecond * Time.deltaTime);
             }
         }
 
@@ -66,14 +60,12 @@ namespace CodeClicker
 
         private void EarnKeyPressMoney()
         {
-            coins += coinsPerKey;
-            UpdateMoneyText();
+            AddCoins(coinsPerKey);
         }
 
         private void EarnLineBonus()
         {
-            coins += passiveCoinsPerSecond * 2;
-            UpdateMoneyText();
+            AddCoins(passiveCoinsPerSecond * 2);
         }
 
         public bool TrySpend(double price)
@@ -88,6 +80,29 @@ namespace CodeClicker
             return true;
         }
 
+        public void AddCoins(double amount)
+        {
+            coins += amount;
+            UpdateMoneyText();
+        }
+
+        public void ResetCoins()
+        {
+            coins = 0;
+            UpdateMoneyText();
+        }
+
+        public void RestoreState(
+            double savedCoins,
+            double savedCoinsPerKey,
+            double savedPassiveCoinsPerSecond)
+        {
+            coins = System.Math.Max(0d, savedCoins);
+            coinsPerKey = System.Math.Max(0.01d, savedCoinsPerKey);
+            passiveCoinsPerSecond = System.Math.Max(0d, savedPassiveCoinsPerSecond);
+            UpdateMoneyText();
+        }
+
         public void ApplyUpgrade(UpgradeEffect effect, double amount)
         {
             if (effect == UpgradeEffect.CoinsPerKey)
@@ -95,12 +110,12 @@ namespace CodeClicker
                 coinsPerKey += amount;
             }
 
-            if (effect == UpgradeEffect.PassiveIncome)
+            else if (effect == UpgradeEffect.PassiveIncome)
             {
                 passiveCoinsPerSecond += amount;
             }
 
-            if (effect == UpgradeEffect.KeysPerLine && codeTypingGenerator != null)
+            else if (effect == UpgradeEffect.KeysPerLine && codeTypingGenerator != null)
             {
                 codeTypingGenerator.SetKeysPerLine((int)amount);
             }
