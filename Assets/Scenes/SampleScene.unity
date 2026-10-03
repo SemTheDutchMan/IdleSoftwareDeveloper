@@ -5209,8 +5209,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.14, y: 0.3}
   m_AnchorMax: {x: 0.34, y: 0.58}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchoredPosition: {x: -212, y: 0}
+  m_SizeDelta: {x: 156.7264, y: 150.9216}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1718213515
 MonoBehaviour:
@@ -6428,11 +6428,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8dd79f1d97424ee6b97c125e097cf8cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CodeClicker.WorkspaceVisuals
-  dualMonitors: {fileID: 2500000003}
-  mechanicalKeyboard: {fileID: 2500000006}
   coffeeMachine: {fileID: 1718213514}
   coffeeMachinePicture: {fileID: 2800000, guid: ffb515c8eea55a640901cd6e81f411cb, type: 3}
-  liveCodeScreen: {fileID: 1993347438}
 --- !u!1 &2500000002
 GameObject:
   m_ObjectHideFlags: 0
